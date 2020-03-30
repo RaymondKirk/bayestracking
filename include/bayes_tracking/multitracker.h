@@ -337,6 +337,14 @@ public:
   {
     // remove lost tracks
     typename std::vector<filter_t>::iterator fi = m_filters.begin(), fiEnd = m_filters.end();
+//    double v_sum = 0, max = 0, min = DBL_MAX;
+//    for(auto &filter : m_filters) {
+//        v_sum += filter.filter->X(0, 0) + filter.filter->X(2, 2) + filter.filter->X(4, 4);
+//        min = filter.filter->X(0, 0) + filter.filter->X(2, 2) + filter.filter->X(4, 4) < min ? filter.filter->X(0, 0) + filter.filter->X(2, 2) + filter.filter->X(4, 4) : min;
+//        max = filter.filter->X(0, 0) + filter.filter->X(2, 2) + filter.filter->X(4, 4) > max ? filter.filter->X(0, 0) + filter.filter->X(2, 2) + filter.filter->X(4, 4) : max;
+//    }
+//    std::cout << "sum: " << v_sum << " max: " << max << " min: " << min << " avg: " << v_sum / m_filters.size() << std::endl;
+
     while (fi != fiEnd) {
       if (isLost(fi->filter, stdLimit)) {
         delete fi->filter;
@@ -447,6 +455,14 @@ private:
   void observe(ObservationModelType& om)
   {
     typename std::map<int, int>::iterator ai, aiEnd = m_assignments.end();
+
+    //      for (int j = 0; j < m_filters.size(); ++j) {
+    //          std:cout << m_filters[j].id << ": ";
+    //          for (auto i: m_filters[j].history)
+    //              std::cout << i << ' ';
+    //          std::cout << std::endl;
+    //      }
+
     for (ai = m_assignments.begin(); ai != aiEnd; ai++) {
       m_filters[ai->second].filter->observe(om, m_observations[ai->first].vec);
       m_filters[ai->second].history.push_back(m_observations[ai->first].id);
