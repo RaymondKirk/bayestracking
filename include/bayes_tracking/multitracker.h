@@ -29,14 +29,17 @@ using namespace Bayesian_filter;
 namespace MTRK {
 
 struct observation_t {
+  int id; // ObservationID
   FM::Vec vec;
   double time;
   string tag;
   // constructors
-  observation_t() : vec(Empty), time(0.) {}
-  observation_t(FM::Vec v) : vec(v) {}
-  observation_t(FM::Vec v, double t) : vec(v), time(t) {}
-  observation_t(FM::Vec v, double t, string f) : vec(v), time(t), tag(f) {}
+  observation_t() : vec(Empty), time(0.), id(-1) {}
+  observation_t(FM::Vec v) : vec(v), id(-1)  {}
+  observation_t(FM::Vec v, double t) : vec(v), time(t), id(-1)  {}
+  observation_t(FM::Vec v, double t, string f) : vec(v), time(t), tag(f), id(-1)  {}
+  observation_t(FM::Vec v, double t, string f, int d) : vec(v), time(t), tag(f), id(d) {};
+  observation_t(FM::Vec v, double t, int d) : vec(v), time(t), id(d) {};
 };
 
 typedef std::vector<observation_t> sequence_t;
@@ -61,7 +64,10 @@ public:
     unsigned long id;
     FilterType* filter;
     string tag;
+    std::vector<int> history;
   } filter_t;
+
+  // made public so classes can inherit multi-tracker without getter/setter
 
 private:
   std::vector<filter_t> m_filters;
@@ -106,7 +112,16 @@ public:
       m_observations.push_back(observation_t(z, time, tag));
   }
 
-  
+  void addObservation(const FM::Vec& z, double time, string tag, int id)
+  {
+      this->m_observations.push_back(observation_t(z, time, tag, id));
+  }
+
+  void addObservation(const FM::Vec& z, double time, int id)
+  {
+      this->m_observations.push_back(observation_t(z, time, id));
+  }
+
   /**
    * Remove observations
    */
@@ -199,9 +214,9 @@ private:
     addFilter(filter);
   }
 
-void addFilter(FilterType* filter, observation_t& observation)
+  void addFilter(FilterType* filter, observation_t& observation)
   {
-    filter_t f = {m_filterNum++, filter, observation.tag};
+    filter_t f = {m_filterNum++, filter, observation.tag, std::vector<int>{observation.id}};
     m_filters.push_back(f);
   }
   
@@ -434,6 +449,8 @@ private:
     typename std::map<int, int>::iterator ai, aiEnd = m_assignments.end();
     for (ai = m_assignments.begin(); ai != aiEnd; ai++) {
       m_filters[ai->second].filter->observe(om, m_observations[ai->first].vec);
+      m_filters[ai->second].history.push_back(m_observations[ai->first].id);
+
       if (m_filters[ai->second].tag.length() == 0) // if filter stil anonymous, name it
         m_filters[ai->second].tag = m_observations[ai->first].tag;
     }
