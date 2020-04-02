@@ -27,9 +27,16 @@ using namespace Bayesian_filter;
 
 
 namespace MTRK {
+    template<class FilterType>
+    struct filter_t {
+        unsigned long id; // The track id
+        FilterType *filter; // EKF, UFK or PF filter
+        string tag; // The class or tag of this filter
+        std::vector<unsigned long> history; // History of all observation_t id's associated with this track when > seq_size
+    };
 
     struct observation_t {
-        int id; // ObservationID
+        unsigned long  id; // ObservationID
         FM::Vec vec;
         double time;
         string tag;
@@ -56,10 +63,11 @@ namespace MTRK {
         CARTESIAN, POLAR
     } observ_model_t;
 
-// to be defined by user
+    // if return of this function true then the tracks are lost, needs to be defined by the user
     template<class FilterType>
-    extern bool isLost(const FilterType *filter, double stdLimit = 1.0);
+    extern bool isLost(const filter_t<FilterType> *filter_container, double stdLimit = 1.0);
 
+    // needs to be defined by the user
     template<class FilterType>
     extern bool initialize(FilterType *&filter, sequence_t &obsvSeq, observ_model_t om_flag = CARTESIAN);
 
@@ -68,20 +76,9 @@ namespace MTRK {
 */
     template<class FilterType, int xSize>
     class MultiTracker {
-
-    public:
-        typedef struct {
-            unsigned long id;
-            FilterType *filter;
-            string tag;
-            std::vector<int> history;
-        } filter_t;
-
-        // made public so classes can inherit multi-tracker without getter/setter
-
     private:
-        std::vector<filter_t> m_filters;
-        int m_filterNum;
+        std::vector<filter_t<FilterType>> m_filters;
+        unsigned long m_filterNum;
         sequence_t m_observations;            // observations
         std::vector<size_t> m_unmatched;      // unmatched observations
         std::vector<FM::Vec> m_prevUnmatched; // previously unmatched observations
@@ -102,7 +99,7 @@ namespace MTRK {
          * Destructor
          */
         ~MultiTracker() {
-            typename std::vector<filter_t>::iterator fi, fiEnd = m_filters.end();
+            typename std::vector<filter_t<FilterType>>::iterator fi, fiEnd = m_filters.end();
             for (fi = m_filters.begin(); fi != fiEnd; fi++) {
                 delete fi->filter;
             }
@@ -151,7 +148,7 @@ namespace MTRK {
          * @param i Index of the filter
          * @return Reference to the filter
          */
-        const filter_t &operator[](int i) {
+        const filter_t<FilterType> &operator[](int i) {
             return m_filters[i];
         }
 
@@ -162,7 +159,7 @@ namespace MTRK {
          */
         template<class PredictionModelType>
         void predict(PredictionModelType &pm) {
-            typename std::vector<filter_t>::iterator fi, fiEnd = m_filters.end();
+            typename std::vector<filter_t<FilterType>>::iterator fi, fiEnd = m_filters.end();
             for (fi = m_filters.begin(); fi != fiEnd; fi++) {
                 fi->filter->predict(pm);
             }
@@ -198,7 +195,7 @@ namespace MTRK {
          */
         void print() {
             int i = 0;
-            typename std::vector<filter_t>::iterator fi, fiEnd = m_filters.end();
+            typename std::vector<filter_t<FilterType>>::iterator fi, fiEnd = m_filters.end();
             for (fi = m_filters.begin(); fi != fiEnd; fi++) {
                 cout << "Filter[" << i++ << "]\n\tx = " << fi->filter->x << "\n\tX = " << fi->filter->X << endl;
             }
@@ -214,12 +211,12 @@ namespace MTRK {
         }
 
         void addFilter(FilterType *filter, observation_t &observation) {
-            filter_t f = {m_filterNum++, filter, observation.tag, std::vector<int>{observation.id}};
+            filter_t<FilterType> f = {m_filterNum++, filter, observation.tag, std::vector<unsigned long>{observation.id}};
             m_filters.push_back(f);
         }
 
         void addFilter(FilterType *filter) {
-            filter_t f = {m_filterNum++, filter};
+            filter_t<FilterType> f = {m_filterNum++, filter};
             m_filters.push_back(f);
         }
 
@@ -324,7 +321,7 @@ namespace MTRK {
     public:
         void pruneTracks(double stdLimit = 1.0) {
             // remove lost tracks
-            typename std::vector<filter_t>::iterator fi = m_filters.begin(), fiEnd = m_filters.end();
+            typename std::vector<filter_t<FilterType>>::iterator fi = m_filters.begin(), fiEnd = m_filters.end();
 //    double v_sum = 0, max = 0, min = DBL_MAX;
 //    for(auto &filter : m_filters) {
 //        v_sum += filter.filter->X(0, 0) + filter.filter->X(2, 2) + filter.filter->X(4, 4);
@@ -334,7 +331,7 @@ namespace MTRK {
 //    std::cout << "sum: " << v_sum << " max: " << max << " min: " << min << " avg: " << v_sum / m_filters.size() << std::endl;
 
             while (fi != fiEnd) {
-                if (isLost(fi->filter, stdLimit)) {
+                if (isLost(&*fi, stdLimit)) {
                     delete fi->filter;
                     fi = m_filters.erase(fi);
                     fiEnd = m_filters.end();
@@ -346,7 +343,7 @@ namespace MTRK {
 
         void pruneNamedTracks() {
             // remove lost tracks
-            typename std::vector<filter_t>::iterator fi = m_filters.begin(), fiEnd = m_filters.end();
+            typename std::vector<filter_t<FilterType>>::iterator fi = m_filters.begin(), fiEnd = m_filters.end();
             std::map<std::string, double> min_named;
             std::map<std::string, long> best_named;
             while (fi != fiEnd) {
