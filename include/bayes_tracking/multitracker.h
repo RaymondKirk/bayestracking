@@ -5,6 +5,7 @@
 //
 //
 // Author: Nicola Bellotto <nbellotto@lincoln.ac.uk>, (C) 2011
+// Modified: Raymond Kirk <ray.tunstill@gmail.com>, (C) 2020
 //
 // Copyright: See COPYING file that comes with this distribution
 //
@@ -27,32 +28,32 @@ using namespace Bayesian_filter;
 
 
 namespace MTRK {
+    struct observation_t {
+        unsigned long id; // Observation ID
+        FM::Vec vec;
+        double time;
+        string tag;
+
+        // Constructors
+        observation_t() : vec(Empty), time(0.), id(-1) {}
+
+        explicit observation_t(const FM::Vec& v) : vec(v), time(0.), id(-1) {}
+
+        observation_t(const FM::Vec& v, double t) : vec(v), time(t), id(-1) {}
+
+        observation_t(const FM::Vec& v, double t, string& f) : vec(v), time(t), tag(f), id(-1) {}
+
+        observation_t(const FM::Vec& v, double t, string& f, int d) : vec(v), time(t), tag(f), id(d) {};
+
+        observation_t(const FM::Vec& v, double t, int d) : vec(v), time(t), id(d) {};
+    };
+
     template<class FilterType>
     struct filter_t {
         unsigned long id; // The track id
         FilterType *filter; // EKF, UFK or PF filter
         string tag; // The class or tag of this filter
-        std::vector<unsigned long> history; // History of all observation_t id's associated with this track when > seq_size
-    };
-
-    struct observation_t {
-        unsigned long  id; // ObservationID
-        FM::Vec vec;
-        double time;
-        string tag;
-
-        // constructors
-        observation_t() : vec(Empty), time(0.), id(-1) {}
-
-        observation_t(FM::Vec v) : vec(v), id(-1) {}
-
-        observation_t(FM::Vec v, double t) : vec(v), time(t), id(-1) {}
-
-        observation_t(FM::Vec v, double t, string f) : vec(v), time(t), tag(f), id(-1) {}
-
-        observation_t(FM::Vec v, double t, string f, int d) : vec(v), time(t), tag(f), id(d) {};
-
-        observation_t(FM::Vec v, double t, int d) : vec(v), time(t), id(d) {};
+        std::vector<observation_t> history; // History of all observation_t id's associated with this track when > seq_size
     };
 
     typedef std::vector<observation_t> sequence_t;
@@ -71,9 +72,10 @@ namespace MTRK {
     template<class FilterType>
     extern bool initialize(FilterType *&filter, sequence_t &obsvSeq, observ_model_t om_flag = CARTESIAN);
 
-/**
-    @author Nicola Bellotto <nick@robots.ox.ac.uk>
-*/
+    /**
+        @author Nicola Bellotto <nick@robots.ox.ac.uk>
+        @modified Raymond Kirk <ray.tunstill@gmail.com>
+    */
     template<class FilterType, int xSize>
     class MultiTracker {
     private:
@@ -83,7 +85,7 @@ namespace MTRK {
         std::vector<size_t> m_unmatched;      // unmatched observations
         std::vector<FM::Vec> m_prevUnmatched; // previously unmatched observations
         std::map<int, int> m_assignments;     // assignment < observation, target >
-        std::vector<sequence_t> m_sequences;  // vector of unmatched observation sequences
+        std::vector<sequence_t> m_sequences;  // vector of unmatched std::vector<observation_t> sequences
 
     public:
 
@@ -113,7 +115,7 @@ namespace MTRK {
          * @param an optional tag use to distinguish objects from each other
          */
         void addObservation(const FM::Vec &z, double time, string tag = "") {
-            m_observations.push_back(observation_t(z, time, tag));
+            this->m_observations.push_back(observation_t(z, time, tag));
         }
 
         void addObservation(const FM::Vec &z, double time, string tag, int id) {
@@ -197,13 +199,12 @@ namespace MTRK {
             int i = 0;
             typename std::vector<filter_t<FilterType>>::iterator fi, fiEnd = m_filters.end();
             for (fi = m_filters.begin(); fi != fiEnd; fi++) {
-                cout << "Filter[" << i++ << "]\n\tx = " << fi->filter->x << "\n\tX = " << fi->filter->X << endl;
+                cout << "Filter[" << i++ << "]\n\tx = " << fi->filter->x << "\n\tX = " << fi->filter->X << std::endl;
             }
         }
 
 
     private:
-
         void addFilter(const FM::Vec &initState, const FM::SymMatrix &initCov) {
             FilterType *filter = new FilterType(xSize);
             filter.init(initState, initCov);
@@ -211,7 +212,8 @@ namespace MTRK {
         }
 
         void addFilter(FilterType *filter, observation_t &observation) {
-            filter_t<FilterType> f = {m_filterNum++, filter, observation.tag, std::vector<unsigned long>{observation.id}};
+            filter_t<FilterType> f = {m_filterNum++, filter, observation.tag,
+                                      std::vector<observation_t>{observation}};
             m_filters.push_back(f);
         }
 
@@ -236,7 +238,7 @@ namespace MTRK {
                     jpda = new jpda::JPDA(znum, N);
                 }
 
-                AssociationMatrix amat(M, N);
+                AssociationMatrix association_matrix(M, N);
                 int dim = om.z_size;
                 Vec zp(dim), s(dim);
                 SymMatrix Zp(dim, dim), S(dim, dim);
@@ -254,7 +256,7 @@ namespace MTRK {
                                     ) {
                                 // Assign maximum cost if observations and trajectories labelled do not match
                                 if (m_observations[i].tag != m_filters[j].tag) {
-                                    amat[i][j] = DBL_MAX;
+                                    association_matrix[i][j] = DBL_MAX;
                                     continue;
                                 }
                             }
@@ -263,9 +265,9 @@ namespace MTRK {
                         om.normalise(s, zp);
                         try {
                             if (AM::mahalanobis(s, S) > AM::gate(s.size())) {
-                                amat[i][j] = DBL_MAX; // gating
+                                association_matrix[i][j] = DBL_MAX; // gating
                             } else {
-                                amat[i][j] = AM::correlation_log(s, S);
+                                association_matrix[i][j] = AM::correlation_log(s, S);
                                 if (alg == NNJPDA || alg == NNJPDA_LABELED) {
                                     jpda->Omega[0][i][j + 1] = true;
                                     jpda->Lambda[0][i][j + 1] = jpda::logGauss(s, S);
@@ -273,19 +275,20 @@ namespace MTRK {
                             }
                         }
                         catch (Bayesian_filter::Filter_exception &e) {
-                            cerr << "###### Exception in AssociationMatrix #####\n";
-                            cerr << "Message: " << e.what() << endl;
-                            amat[i][j] = DBL_MAX;  // set to maximum
+                            std::cerr << "###### Exception in AssociationMatrix #####\n";
+                            std::cerr << "Message: " << e.what() << std::endl;
+                            association_matrix[i][j] = DBL_MAX;  // set to maximum
                         }
                     }
                 }
                 if (alg == NN || alg == NN_LABELED) {  /// NN data association
-                    amat.computeNN(CORRELATION_LOG);
+                    association_matrix.computeNN(CORRELATION_LOG);
                     // record unmatched observations for possible candidates creation
-                    m_unmatched = amat.URow;
+                    m_unmatched = association_matrix.URow;
                     // data assignment
-                    for (size_t n = 0; n < amat.NN.size(); n++) {
-                        m_assignments.insert(std::make_pair(amat.NN[n].row, amat.NN[n].col));
+                    for (size_t n = 0; n < association_matrix.NN.size(); n++) {
+                        m_assignments.insert(
+                                std::make_pair(association_matrix.NN[n].row, association_matrix.NN[n].col));
                     }
                 } else if (alg == NNJPDA || alg == NNJPDA_LABELED) { /// NNJPDA data association (one sensor)
                     // compute associations
@@ -305,7 +308,7 @@ namespace MTRK {
                     }
                     delete jpda;
                 } else {
-                    cerr << "###### Unknown association algorithm: " << alg << " #####\n";
+                    std::cerr << "###### Unknown association algorithm: " << alg << " #####\n";
                     return false;
                 }
 
@@ -322,16 +325,16 @@ namespace MTRK {
         void pruneTracks(double stdLimit = 1.0) {
             // remove lost tracks
             typename std::vector<filter_t<FilterType>>::iterator fi = m_filters.begin(), fiEnd = m_filters.end();
-//    double v_sum = 0, max = 0, min = DBL_MAX;
-//    for(auto &filter : m_filters) {
-//        v_sum += filter.filter->X(0, 0) + filter.filter->X(2, 2) + filter.filter->X(4, 4);
-//        min = filter.filter->X(0, 0) + filter.filter->X(2, 2) + filter.filter->X(4, 4) < min ? filter.filter->X(0, 0) + filter.filter->X(2, 2) + filter.filter->X(4, 4) : min;
-//        max = filter.filter->X(0, 0) + filter.filter->X(2, 2) + filter.filter->X(4, 4) > max ? filter.filter->X(0, 0) + filter.filter->X(2, 2) + filter.filter->X(4, 4) : max;
-//    }
-//    std::cout << "sum: " << v_sum << " max: " << max << " min: " << min << " avg: " << v_sum / m_filters.size() << std::endl;
+            //    double v_sum = 0, max = 0, min = DBL_MAX;
+            //    for(auto &filter : m_filters) {
+            //        v_sum += filter.filter->X(0, 0) + filter.filter->X(2, 2) + filter.filter->X(4, 4);
+            //        min = filter.filter->X(0, 0) + filter.filter->X(2, 2) + filter.filter->X(4, 4) < min ? filter.filter->X(0, 0) + filter.filter->X(2, 2) + filter.filter->X(4, 4) : min;
+            //        max = filter.filter->X(0, 0) + filter.filter->X(2, 2) + filter.filter->X(4, 4) > max ? filter.filter->X(0, 0) + filter.filter->X(2, 2) + filter.filter->X(4, 4) : max;
+            //    }
+            //    std::cout << "sum: " << v_sum << " max: " << max << " min: " << min << " avg: " << v_sum / m_filters.size() << std::std::endl;
 
             while (fi != fiEnd) {
-                if (isLost(&*fi, stdLimit)) {
+                if (isLost(std::addressof(*fi), stdLimit)) {
                     delete fi->filter;
                     fi = m_filters.erase(fi);
                     fiEnd = m_filters.end();
@@ -419,9 +422,8 @@ namespace MTRK {
                 }
             }
 
-            // memorize remaining unmatched observations
-            std::vector<size_t>::iterator uiEnd = m_unmatched.end();
-            for (ui = m_unmatched.begin(); ui != uiEnd; ui++) {
+            // Memorize remaining unmatched observations
+            for (ui = m_unmatched.begin(); ui != m_unmatched.end(); ui++) {
                 sequence_t s;
                 s.push_back(m_observations[*ui]);
                 m_sequences.push_back(s);
@@ -439,14 +441,16 @@ namespace MTRK {
 //                std::cout << m_filters[j].id << ": ";
 //                for (auto i: m_filters[j].history)
 //                    std::cout << i << ' ';
-//                std::cout << std::endl;
+//                std::cout << std::std::endl;
 //            }
 
             for (ai = m_assignments.begin(); ai != aiEnd; ai++) {
                 m_filters[ai->second].filter->observe(om, m_observations[ai->first].vec);
-                m_filters[ai->second].history.push_back(m_observations[ai->first].id);
 
-                if (m_filters[ai->second].tag.length() == 0) // if filter stil anonymous, name it
+                // Add assignment to filter history
+                m_filters[ai->second].history.push_back(m_observations[ai->first]);
+
+                if (m_filters[ai->second].tag.length() == 0) // If filter still anonymous, name it
                     m_filters[ai->second].tag = m_observations[ai->first].tag;
             }
         }
