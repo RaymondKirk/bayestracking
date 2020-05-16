@@ -83,7 +83,6 @@ namespace MTRK {
         unsigned long m_filterNum;
         sequence_t m_observations;            // observations
         std::vector<size_t> m_unmatched;      // unmatched observations
-        std::vector<FM::Vec> m_prevUnmatched; // previously unmatched observations
         std::map<int, int> m_assignments;     // assignment < observation, target >
         std::vector<sequence_t> m_sequences;  // vector of unmatched std::vector<observation_t> sequences
 
@@ -240,11 +239,12 @@ namespace MTRK {
 
                 AssociationMatrix association_matrix(M, N);
                 int dim = om.z_size;
-                Vec zp(dim), s(dim);
-                SymMatrix Zp(dim, dim), S(dim, dim);
+                Vec pred_z(dim), s(dim);
+                SymMatrix pred_z_cov(dim, dim), S(dim, dim);
                 for (int j = 0; j < N; j++) {
-                    m_filters[j].filter->predict_observation(om, zp, Zp);
-                    S = Zp + om.Z;  // H*P*H' + R
+                    m_filters[j].filter->predict_observation(om, pred_z, pred_z_cov);
+                    S = pred_z_cov + om.Z;  // H*P*H' + R
+
                     for (int i = 0; i < M; i++) {
 
                         // Only Check NN_LABELED, NNJPDA_LABELED tag associate not yet implemented
@@ -261,8 +261,8 @@ namespace MTRK {
                                 }
                             }
                         }
-                        s = zp - m_observations[i].vec;
-                        om.normalise(s, zp);
+                        s = pred_z - m_observations[i].vec;
+                        om.normalise(s, pred_z);
                         try {
                             if (AM::mahalanobis(s, S) > AM::gate(s.size())) {
                                 association_matrix[i][j] = DBL_MAX; // gating
@@ -286,9 +286,8 @@ namespace MTRK {
                     // record unmatched observations for possible candidates creation
                     m_unmatched = association_matrix.URow;
                     // data assignment
-                    for (size_t n = 0; n < association_matrix.NN.size(); n++) {
-                        m_assignments.insert(
-                                std::make_pair(association_matrix.NN[n].row, association_matrix.NN[n].col));
+                    for (auto & n : association_matrix.NN) {
+                        m_assignments.insert(std::make_pair(n.row, n.col));
                     }
                 } else if (alg == NNJPDA || alg == NNJPDA_LABELED) { /// NNJPDA data association (one sensor)
                     // compute associations
@@ -389,10 +388,11 @@ namespace MTRK {
         template<class ObservationModelType>
         void createTracks(ObservationModelType &om, unsigned int seqSize, double seqTime, observ_model_t om_flag) {
             // create new tracks from unmatched observations
-            std::vector<size_t>::iterator ui = m_unmatched.begin();
+            auto ui = m_unmatched.begin();
             while (ui != m_unmatched.end()) {
-                std::vector<sequence_t>::iterator si = m_sequences.begin();
+                auto si = m_sequences.begin();
                 bool matched = false;
+
                 while (si != m_sequences.end()) {
                     if (m_observations[*ui].time - si->back().time > seqTime) { // erase old unmatched observations
                         si = m_sequences.erase(si);
@@ -401,8 +401,8 @@ namespace MTRK {
                         // add new track
                         si->push_back(m_observations[*ui]);
                         FilterType *filter;
-                        if (si->size() >= seqSize &&
-                            initialize(filter, *si, om_flag)) {  // there's a minimum number of sequential observations
+                        // there's a minimum number of sequential observations
+                        if (si->size() >= seqSize && initialize(filter, *si, om_flag)) {
                             addFilter(filter, m_observations[*ui]);
                             // remove sequence
                             si = m_sequences.erase(si);
