@@ -51,11 +51,11 @@ static double getTime()
 
 // rule to detect lost track
 template<class FilterType>
-bool MTRK::isLost(const FilterType* filter, double varLimit) {
-  // track lost if var(x)+var(y) > varLimit
-  if (filter->X(0,0) + filter->X(2,2) > sqr(varLimit))
-    return true;
-  return false;
+bool MTRK::isLost(const MTRK::filter_t<FilterType>* filter_container, double varLimit) {
+    // track lost if var(x)+var(y) > varLimit
+    if (filter_container->filter->X(0,0) + filter_container->filter->X(2,2) > sqr(varLimit))
+        return true;
+    return false;
 }
 
 // rule to create new track
