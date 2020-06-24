@@ -33,6 +33,7 @@ namespace MTRK {
         FM::Vec vec;
         double time;
         string tag;
+        std::vector<double> reid_features;
 
         // Constructors
         observation_t() : vec(Empty), time(0.), id(-1) {}
@@ -43,9 +44,16 @@ namespace MTRK {
 
         observation_t(const FM::Vec& v, double t, string& f) : vec(v), time(t), tag(f), id(-1) {}
 
+        observation_t(const FM::Vec& v, double t, int d) : vec(v), time(t), id(d) {};
+
         observation_t(const FM::Vec& v, double t, string& f, int d) : vec(v), time(t), tag(f), id(d) {};
 
-        observation_t(const FM::Vec& v, double t, int d) : vec(v), time(t), id(d) {};
+        observation_t(const FM::Vec& v, double t, string& f, int d, std::vector<double> reid) : vec(v), time(t), tag(f),
+            id(d), reid_features(reid) {};
+
+        observation_t(const FM::Vec& v, double t, int d, std::vector<double> reid) : vec(v), time(t), id(d),
+            reid_features(reid) {};
+
     };
 
     template<class FilterType>
@@ -117,12 +125,20 @@ namespace MTRK {
             this->m_observations.push_back(observation_t(z, time, tag));
         }
 
+        void addObservation(const FM::Vec &z, double time, int id) {
+            this->m_observations.push_back(observation_t(z, time, id));
+        }
+
         void addObservation(const FM::Vec &z, double time, string tag, int id) {
             this->m_observations.push_back(observation_t(z, time, tag, id));
         }
 
-        void addObservation(const FM::Vec &z, double time, int id) {
-            this->m_observations.push_back(observation_t(z, time, id));
+        void addObservation(const FM::Vec &z, double time, int id, std::vector<double> reid_features) {
+            this->m_observations.push_back(observation_t(z, time, id, reid_features));
+        }
+
+        void addObservation(const FM::Vec &z, double time, string tag, int id, std::vector<double> reid_features) {
+            this->m_observations.push_back(observation_t(z, time, tag, id, reid_features));
         }
 
         /**
@@ -206,7 +222,7 @@ namespace MTRK {
     private:
         void addFilter(const FM::Vec &initState, const FM::SymMatrix &initCov) {
             FilterType *filter = new FilterType(xSize);
-            filter.init(initState, initCov);
+            filter->init(initState, initCov);
             addFilter(filter);
         }
 
