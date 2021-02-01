@@ -1,8 +1,8 @@
 <?xml version="1.0"?>
 <package>
-  <name>bayes_tracking</name>
+  <name>rays_bayes_tracking</name>
   <version>1.4.0</version>
-  <description>The bayestracking package uses extended or unscented Kalman filters to track movement. The constant velocity model has been designed to track the movement of people in cartesian space in particular.</description>
+  <description>The rays_bayes_tracking package uses extended or unscented Kalman filters to track movement. The constant velocity model has been designed to track the movement of people in cartesian space in particular.</description>
 
   <maintainer email="rkirk@lincoln.ac.uk">Raymond Kirk</maintainer>
   <maintainer email="ray.tunstill@gmail.com">Raymond Tunstill</maintainer>

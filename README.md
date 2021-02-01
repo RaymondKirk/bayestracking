@@ -1,5 +1,7 @@
 ## BayesTracking - a library for Bayesian tracking
 
+Modified version from the original. Update with [$(ros_pkg rasberry_tracking)/scripts/update_bayestracking.sh](../../scripts/update_bayestracking.sh).
+
 ### Requirements
 * Bayes++ (included in the repository)
 * OpenCV 2.x (only to build the examples)
