@@ -4,12 +4,12 @@
   <version>1.4.0</version>
   <description>The bayestracking package uses extended or unscented Kalman filters to track movement. The constant velocity model has been designed to track the movement of people in cartesian space in particular.</description>
 
-  <maintainer email="cdondrup@lincoln.ac.uk">Christian Dondrup</maintainer>
-  <maintainer email="mhanheide@lincoln.ac.uk">Marc Hanheide</maintainer>
+  <maintainer email="rkirk@lincoln.ac.uk">Raymond Kirk</maintainer>
+  <maintainer email="ray.tunstill@gmail.com">Raymond Tunstill</maintainer>
 
   <license>MIT</license>
 
-  <url type="git">https://github.com/LCAS/bayestracking</url>
+  <url type="git">https://github.com/RaymondKirk/bayestracking</url>
   <url type="doi">http://dx.doi.org/10.5281/zenodo.10318</url>
 
   <author email="nbellotto@lincoln.ac.uk">Nicola Bellotto</author>
